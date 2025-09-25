@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Proyectos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc; /* Fondo claro */
+            color: #1a202c; /* Texto oscuro */
+        }
+        .container-card {
+            background-color: white; /* Contenedor claro */
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+        }
+        .task-row:hover {
+            background-color: #e2e8f0; /* Color de fondo al pasar el cursor */
+        }
+        .gantt-bar {
+            height: 24px;
+            border-radius: 9999px;
+            background: linear-gradient(90deg, #60a5fa, #2563eb);
+            transition: transform 0.2s ease-in-out;
+        }
+        .gantt-bar:hover {
+            transform: scale(1.05);
+        }
+        .gantt-header-cell {
+            min-width: 50px;
+            padding: 8px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .gantt-table-container {
+            overflow-x: auto;
+            position: relative;
+            background-color: white; /* Tabla con fondo blanco */
+            border-radius: 1rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 8px;
+            border-bottom: 1px solid #e2e8f0;
+            white-space: nowrap;
+        }
+        .task-detail-cell {
+            min-width: 180px;
+        }
+        .delete-btn {
+            background-color: #ef4444;
+            transition: background-color 0.2s, transform 0.2s;
+            box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);
+        }
+        .delete-btn:hover {
+            background-color: #dc2626;
+            transform: translateY(-2px);
+        }
+        .add-task-row input, .add-task-row select {
+            border: 1px solid #d1d5db;
+            padding: 6px;
+            border-radius: 0.5rem;
+            width: 100%;
+            transition: box-shadow 0.2s;
+        }
+        .add-task-row input:focus, .add-task-row select:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+        }
+        
+        .tab-button.active {
+            background-color: #e2e8f0;
+            font-weight: bold;
+            border-bottom: 3px solid #3b82f6;
+            color: #1a202c;
+        }
+        .tab-button {
+            transition: background-color 0.2s, border-bottom 0.2s, color 0.2s;
+        }
+
+        .editable {
+            cursor: pointer;
+            position: relative;
+        }
+
+        .editable input, .editable select {
+            background: none;
+            border: 1px solid #d1d5db;
+            padding: 4px;
+            border-radius: 0.5rem;
+            width: 100%;
+            color: #1f2937;
+        }
+
+        /* Ocultar elementos en el modo de exportación a PDF */
+        .pdf-exporting .delete-btn,
+        .pdf-exporting .add-task-row,
+        .pdf-exporting .btn-with-icon {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+    <div class="container-card w-full max-w-7xl">
+        <h1 class="text-4xl font-extrabold mb-2 text-center text-gray-900">Gestión de Proyectos</h1>
+        <p class="text-center text-sm text-gray-500 mb-6">ID de Usuario: <span id="userIdDisplay" class="font-mono">Local Storage</span></p>
+
+        <div class="flex border-b-2 border-gray-200 mb-6">
+            <button id="projectsTabBtn" class="tab-button flex-1 py-3 px-4 text-center text-gray-600 hover:bg-gray-200 focus:outline-none transition duration-200 active">
+                <i class="fas fa-folder mr-2"></i> Proyectos
+            </button>
+            <button id="tasksTabBtn" class="tab-button flex-1 py-3 px-4 text-center text-gray-600 hover:bg-gray-200 focus:outline-none transition duration-200">
+                <i class="fas fa-tasks mr-2"></i> Tareas
+            </button>
+        </div>
+        
+        <div id="projectsTabContent" class="tab-content">
+            <h2 class="text-xl font-bold mb-4 text-gray-700">Gestionar Proyectos</h2>
+            <div class="flex flex-col md:flex-row gap-4 items-center mb-6">
+                <input type="text" id="newProjectNameInput" placeholder="Nombre del proyecto" class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px] shadow-sm bg-white text-gray-900 placeholder-gray-500">
+                <button id="createProjectBtn" class="bg-blue-600 text-white p-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-300 w-full md:w-auto btn-with-icon shadow-md">
+                    <i class="fas fa-plus mr-2"></i> Crear Proyecto
+                </button>
+            </div>
+            <div class="flex flex-col md:flex-row gap-2 items-center">
+                <label for="projectSelect" class="font-semibold text-gray-700">Seleccionar proyecto:</label>
+                <select id="projectSelect" class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px] shadow-sm bg-white text-gray-900">
+                    <option value="">-- Seleccione un proyecto --</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="tasksTabContent" class="tab-content hidden">
+            <div id="tasksContainer" class="hidden">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-700 mb-2 md:mb-0">Tareas del Proyecto: <span id="currentProjectName" class="text-blue-600"></span></h2>
+                    <button id="exportPdfBtn" class="bg-red-600 text-white p-3 rounded-lg font-semibold hover:bg-red-700 transition duration-300 w-full md:w-auto btn-with-icon shadow-md">
+                        <i class="fas fa-file-pdf mr-2"></i> Exportar a PDF
+                    </button>
+                </div>
+                
+                <div class="gantt-table-container rounded-xl">
+                    <table class="w-full border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-900 font-bold text-sm uppercase">
+                                <th class="task-detail-cell text-left">Nombre</th>
+                                <th class="task-detail-cell text-left">Responsable</th>
+                                <th class="task-detail-cell text-left">Predecesora</th>
+                                <th class="task-detail-cell text-left">Duración</th>
+                                <th class="task-detail-cell text-left">Inicio</th>
+                                <th class="task-detail-cell text-left">Fin</th>
+                                <th class="task-detail-cell text-left">Acciones</th>
+                                <th colspan="100" class="text-center gantt-header-cell">Diagrama de Gantt</th>
+                            </tr>
+                            <tr id="ganttDatesHeader" class="bg-gray-200 text-gray-800 font-medium">
+                                <th colspan="7"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="ganttBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="messageBox" class="hidden fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center p-4 z-50">
+            <div class="bg-white text-gray-900 p-8 rounded-xl shadow-2xl text-center max-w-sm">
+                <p id="messageText" class="text-lg font-medium mb-4"></p>
+                <button id="closeMessageBtn" class="bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition shadow-md">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script type="module">
+        // Variables globales
+        let currentProjectId = null;
+        let allTasks = [];
+        let allProjects = [];
+
+        // Referencias de elementos del DOM
+        const projectsTabBtn = document.getElementById('projectsTabBtn');
+        const tasksTabBtn = document.getElementById('tasksTabBtn');
+        const projectsTabContent = document.getElementById('projectsTabContent');
+        const tasksTabContent = document.getElementById('tasksTabContent');
+        const newProjectNameInput = document.getElementById('newProjectNameInput');
+        const createProjectBtn = document.getElementById('createProjectBtn');
+        const projectSelect = document.getElementById('projectSelect');
+        const tasksContainer = document.getElementById('tasksContainer');
+        const currentProjectName = document.getElementById('currentProjectName');
+        const ganttDatesHeader = document.getElementById('ganttDatesHeader');
+        const ganttBody = document.getElementById('ganttBody');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+        const closeMessageBtn = document.getElementById('closeMessageBtn');
+        const ganttTableContainer = document.querySelector('.gantt-table-container');
+        const exportPdfBtn = document.getElementById('exportPdfBtn');
+
+        // --- Funciones para manejar datos en Local Storage ---
+
+        /**
+         * Carga los proyectos desde localStorage.
+         * @returns {Array} Una lista de proyectos.
+         */
+        function loadProjects() {
+            const projectsJson = localStorage.getItem('projects');
+            return projectsJson ? JSON.parse(projectsJson) : [];
+        }
+
+        /**
+         * Guarda los proyectos en localStorage.
+         * @param {Array} projects La lista de proyectos a guardar.
+         */
+        function saveProjects(projects) {
+            localStorage.setItem('projects', JSON.stringify(projects));
+        }
+
+        /**
+         * Carga las tareas de un proyecto específico desde localStorage.
+         * @param {string} projectId El ID del proyecto.
+         * @returns {Array} Una lista de tareas.
+         */
+        function loadTasks(projectId) {
+            const tasksJson = localStorage.getItem(`tasks_${projectId}`);
+            return tasksJson ? JSON.parse(tasksJson) : [];
+        }
+
+        /**
+         * Guarda las tareas de un proyecto específico en localStorage.
+         * @param {string} projectId El ID del proyecto.
+         * @param {Array} tasks La lista de tareas a guardar.
+         */
+        function saveTasks(projectId, tasks) {
+            localStorage.setItem(`tasks_${projectId}`, JSON.stringify(tasks));
+        }
+
+        // --- Funciones principales de la aplicación ---
+
+        /**
+         * Renderiza el selector de proyectos y lo actualiza desde localStorage.
+         */
+        function renderProjectSelect() {
+            allProjects = loadProjects();
+            projectSelect.innerHTML = '<option value="">-- Seleccione un proyecto --</option>';
+            allProjects.forEach(project => {
+                const option = document.createElement('option');
+                option.value = project.id;
+                option.textContent = project.name;
+                projectSelect.appendChild(option);
+            });
+            if (currentProjectId) {
+                projectSelect.value = currentProjectId;
+            }
+        }
+
+        /**
+         * Renderiza la tabla de Gantt con las tareas del proyecto seleccionado.
+         * @param {Array} tasks La lista de tareas a renderizar.
+         */
+        function renderGanttTable(tasks) {
+            ganttDatesHeader.innerHTML = '';
+            ganttBody.innerHTML = '';
+            
+            // Populate the predecessor dropdown options
+            const predecessorOptions = tasks.map(task => `<option value="${task.id}">${task.name}</option>`).join('');
+
+            // Add the "add new task" row
+            const addTaskRow = document.createElement('tr');
+            addTaskRow.className = 'add-task-row bg-gray-100';
+            addTaskRow.innerHTML = `
+                <td><input type="text" id="newTaskInput" placeholder="Nombre" class="text-gray-900"></td>
+                <td><input type="text" id="newResponsibleInput" placeholder="Responsable" class="text-gray-900"></td>
+                <td><select id="predecessorSelect" class="text-gray-900"><option value="">Ninguna</option>${predecessorOptions}</select></td>
+                <td><input type="number" id="newDurationInput" placeholder="Días" class="text-gray-900"></td>
+                <td><input type="date" id="newStartDateInput" placeholder="Inicio" class="text-gray-900"></td>
+                <td></td> <td><button id="addTaskBtn" class="bg-blue-600 text-white px-3 py-1 rounded-lg font-semibold w-full btn-with-icon">
+                    <i class="fas fa-plus"></i>
+                </button></td>
+            `;
+            ganttBody.appendChild(addTaskRow);
+
+            // Attach event listeners for the new row's elements AFTER they have been added to the DOM
+            document.getElementById('addTaskBtn').addEventListener('click', handleAddTask);
+            document.getElementById('predecessorSelect').addEventListener('change', (e) => {
+                const predecessorId = e.target.value;
+                if (predecessorId) {
+                    const predecessorTask = allTasks.find(t => t.id === predecessorId);
+                    if (predecessorTask) {
+                        const predecessorEndDate = new Date(predecessorTask.endDate);
+                        predecessorEndDate.setDate(predecessorEndDate.getDate() + 1);
+                        document.getElementById('newStartDateInput').value = predecessorEndDate.toISOString().slice(0, 10);
+                    }
+                } else {
+                    document.getElementById('newStartDateInput').value = '';
+                }
+            });
+            
+            if (tasks.length === 0) {
+                return;
+            }
+
+            // Sort tasks to ensure dependencies are shown sequentially
+            tasks.sort((a, b) => {
+                if (a.startDate === b.startDate) {
+                    return 0;
+                }
+                if (!a.startDate) {
+                    return 1;
+                }
+                if (!b.startDate) {
+                    return -1;
+                }
+                return new Date(a.startDate) - new Date(b.startDate);
+            });
+
+            const allDates = new Set();
+            tasks.forEach(task => {
+                if (task.startDate && task.duration) {
+                    const startDate = new Date(task.startDate);
+                    for (let i = 0; i < task.duration; i++) {
+                        const date = new Date(startDate);
+                        date.setDate(startDate.getDate() + i);
+                        allDates.add(date.toISOString().slice(0, 10));
+                    }
+                }
+            });
+
+            const sortedDates = Array.from(allDates).sort();
+            const minDate = sortedDates.length > 0 ? new Date(sortedDates[0]) : new Date();
+            const maxDate = new Date(Math.max(...tasks.map(t => new Date(t.endDate).getTime())));
+
+            // Render week headers
+            const weekHeaderCell = document.createElement('th');
+            weekHeaderCell.colSpan = "7";
+            ganttDatesHeader.appendChild(weekHeaderCell);
+
+            let currentDate = new Date(minDate);
+            currentDate.setDate(currentDate.getDate() - (currentDate.getDay() || 7) + 1); // Start on Monday
+            
+            const weekCount = Math.ceil((maxDate - currentDate) / (1000 * 60 * 60 * 24 * 7)) + 1;
+            for (let i = 0; i < weekCount; i++) {
+                const weekNumber = getWeekNumber(currentDate);
+                const th = document.createElement('th');
+                th.textContent = `Sem ${weekNumber}`;
+                th.className = "gantt-header-cell text-gray-800";
+                ganttDatesHeader.appendChild(th);
+                currentDate.setDate(currentDate.getDate() + 7);
+            }
+
+            // Render task rows
+            tasks.forEach(task => {
+                const row = document.createElement('tr');
+                row.className = 'task-row bg-white text-gray-900';
+                row.setAttribute('data-task-id', task.id);
+
+                // Task details cells
+                const nameCell = document.createElement('td');
+                nameCell.textContent = task.name;
+                nameCell.className = "task-detail-cell editable";
+                nameCell.setAttribute('data-field', 'name');
+                row.appendChild(nameCell);
+
+                const responsibleCell = document.createElement('td');
+                responsibleCell.textContent = task.responsible;
+                responsibleCell.className = "task-detail-cell editable";
+                responsibleCell.setAttribute('data-field', 'responsible');
+                row.appendChild(responsibleCell);
+                
+                const predecessorName = task.predecessorId ? (tasks.find(t => t.id === task.predecessorId)?.name || 'N/A') : 'N/A';
+                const predecessorCell = document.createElement('td');
+                predecessorCell.textContent = predecessorName;
+                predecessorCell.className = "task-detail-cell editable";
+                predecessorCell.setAttribute('data-field', 'predecessorId');
+                predecessorCell.setAttribute('data-predecessor-id', task.predecessorId || '');
+                row.appendChild(predecessorCell);
+                
+                const durationCell = document.createElement('td');
+                durationCell.textContent = `${task.duration} días`;
+                durationCell.className = "task-detail-cell editable";
+                durationCell.setAttribute('data-field', 'duration');
+                row.appendChild(durationCell);
+
+                const startDateCell = document.createElement('td');
+                startDateCell.textContent = task.startDate;
+                startDateCell.className = "task-detail-cell editable";
+                startDateCell.setAttribute('data-field', 'startDate');
+                row.appendChild(startDateCell);
+                
+                const endDateCell = document.createElement('td');
+                endDateCell.textContent = task.endDate;
+                endDateCell.className = "task-detail-cell";
+                row.appendChild(endDateCell);
+                
+                // Delete button cell
+                const deleteCell = document.createElement('td');
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-btn text-white px-3 py-1 rounded-full text-sm font-semibold';
+                deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+                deleteBtn.addEventListener('click', () => {
+                    deleteTask(task.id);
+                });
+                deleteCell.appendChild(deleteBtn);
+                row.appendChild(deleteCell);
+                
+                // Gantt chart cells
+                for (let i = 0; i < weekCount; i++) {
+                    const ganttCell = document.createElement('td');
+                    ganttCell.className = 'relative text-center gantt-cell';
+
+                    const weekStart = new Date(minDate);
+                    weekStart.setDate(weekStart.getDate() - (weekStart.getDay() || 7) + 1 + i * 7);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 6);
+
+                    const taskStartDate = new Date(task.startDate);
+                    const taskEndDate = new Date(task.endDate);
+
+                    if (taskStartDate <= weekEnd && taskEndDate >= weekStart) {
+                        const bar = document.createElement('div');
+                        bar.className = 'gantt-bar mx-1';
+                        bar.setAttribute('data-task-id', task.id);
+                        bar.setAttribute('data-bar-type', 'main');
+
+                        const startOffsetDays = Math.max(0, (taskStartDate - weekStart) / (1000 * 60 * 60 * 24));
+                        const endOffsetDays = Math.min(6, (taskEndDate - weekStart) / (1000 * 60 * 60 * 24));
+                        const barWidth = (endOffsetDays - startOffsetDays + 1) / 7 * 100;
+                        const barLeft = (startOffsetDays / 7) * 100;
+
+                        bar.style.width = `${barWidth}%`;
+                        bar.style.marginLeft = `${barLeft}%`;
+                        bar.style.position = 'absolute';
+                        bar.style.left = '0';
+                        bar.style.top = '50%';
+                        bar.style.transform = 'translateY(-50%)';
+
+                        const tooltip = document.createElement('div');
+                        tooltip.className = 'absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 text-xs text-white bg-gray-800 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 whitespace-normal';
+                        tooltip.innerHTML = `
+                            <div class="font-bold">${task.name}</div>
+                            <div>Inicio: ${task.startDate}</div>
+                            <div>Fin: ${task.endDate}</div>
+                        `;
+                        bar.appendChild(tooltip);
+
+                        ganttCell.appendChild(bar);
+                    }
+                    row.appendChild(ganttCell);
+                }
+                
+                // Insert the row at the top of the tbody, before the add task row
+                ganttBody.insertBefore(row, addTaskRow);
+            });
+            ganttTableContainer.dataset.tasks = JSON.stringify(tasks);
+        }
+
+        // --- Lógica de la aplicación ---
+
+        /**
+         * Maneja la creación de un nuevo proyecto.
+         */
+        function createProject(projectName) {
+            const newProject = {
+                id: Date.now().toString(),
+                name: projectName
+            };
+            allProjects.push(newProject);
+            saveProjects(allProjects);
+            renderProjectSelect();
+            showMessage('Proyecto creado con éxito.');
+        }
+
+        /**
+         * Maneja la adición de una nueva tarea.
+         */
+        function handleAddTask() {
+            const newTaskInput = document.getElementById('newTaskInput');
+            const newResponsibleInput = document.getElementById('newResponsibleInput');
+            const newDurationInput = document.getElementById('newDurationInput');
+            const newStartDateInput = document.getElementById('newStartDateInput');
+            const predecessorSelect = document.getElementById('predecessorSelect');
+            
+            const taskName = newTaskInput.value.trim();
+            const responsible = newResponsibleInput.value.trim();
+            const duration = newDurationInput.value;
+            const startDate = newStartDateInput.value;
+            const predecessorId = predecessorSelect.value;
+
+            if (taskName === '' || responsible === '' || duration === '' || parseInt(duration) <= 0) {
+                showMessage('Por favor, completa todos los campos: nombre de tarea, responsable y una duración válida.');
+                return;
+            }
+
+            addTaskToLocalStorage(taskName, responsible, duration, predecessorId, startDate);
+            newTaskInput.value = '';
+            newResponsibleInput.value = '';
+            newDurationInput.value = '';
+            newStartDateInput.value = '';
+            predecessorSelect.value = '';
+        }
+
+        /**
+         * Agrega una nueva tarea a localStorage.
+         */
+        function addTaskToLocalStorage(name, responsible, duration, predecessorId, userStartDate) {
+            if (!currentProjectId) return;
+            
+            let startDate = userStartDate;
+            if (!startDate && predecessorId) {
+                const predecessorTask = allTasks.find(t => t.id === predecessorId);
+                if (predecessorTask) {
+                    const predecessorEndDate = new Date(predecessorTask.endDate);
+                    predecessorEndDate.setDate(predecessorEndDate.getDate() + 1);
+                    startDate = predecessorEndDate.toISOString().slice(0, 10);
+                }
+            }
+            
+            if (!startDate) {
+                startDate = new Date().toISOString().slice(0, 10);
+            }
+            
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + parseInt(duration) - 1);
+
+            const taskData = {
+                id: Date.now().toString(),
+                name,
+                responsible,
+                duration: parseInt(duration),
+                startDate,
+                endDate: endDate.toISOString().slice(0, 10)
+            };
+            if (predecessorId) {
+                taskData.predecessorId = predecessorId;
+            }
+
+            allTasks.push(taskData);
+            saveTasks(currentProjectId, allTasks);
+            renderGanttTable(allTasks);
+            showMessage('Tarea agregada con éxito.');
+        }
+
+        /**
+         * Actualiza una tarea en localStorage.
+         */
+        function updateTaskInLocalStorage(taskId, field, value) {
+            if (!currentProjectId) return;
+
+            const taskIndex = allTasks.findIndex(t => t.id === taskId);
+            if (taskIndex === -1) return;
+
+            const existingTask = allTasks[taskIndex];
+            existingTask[field] = value;
+
+            let newStartDate = existingTask.startDate;
+            let newDuration = existingTask.duration;
+            
+            if (field === 'startDate') {
+                newStartDate = value;
+            } else if (field === 'duration') {
+                newDuration = parseInt(value);
+            } else if (field === 'predecessorId') {
+                const predecessorTask = allTasks.find(t => t.id === value);
+                if (predecessorTask) {
+                    const predecessorEndDate = new Date(predecessorTask.endDate);
+                    predecessorEndDate.setDate(predecessorEndDate.getDate() + 1);
+                    newStartDate = predecessorEndDate.toISOString().slice(0, 10);
+                } else {
+                    newStartDate = new Date().toISOString().slice(0, 10);
+                }
+                existingTask.predecessorId = value;
+            }
+
+            const newEndDate = new Date(newStartDate);
+            newEndDate.setDate(newEndDate.getDate() + newDuration - 1);
+            existingTask.endDate = newEndDate.toISOString().slice(0, 10);
+            existingTask.startDate = newStartDate;
+
+            saveTasks(currentProjectId, allTasks);
+            renderGanttTable(allTasks);
+            showMessage('Tarea actualizada con éxito.');
+        }
+
+        /**
+         * Elimina una tarea de localStorage.
+         */
+        function deleteTask(taskId) {
+            if (!currentProjectId) return;
+            allTasks = allTasks.filter(task => task.id !== taskId);
+            saveTasks(currentProjectId, allTasks);
+            renderGanttTable(allTasks);
+            showMessage('Tarea eliminada con éxito.');
+        }
+
+        /**
+         * Obtiene el número de semana (ISO 8601).
+         */
+        function getWeekNumber(d) {
+            d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        }
+
+        // Función para mostrar el cuadro de mensaje
+        function showMessage(text) {
+            messageText.textContent = text;
+            messageBox.classList.remove('hidden');
+        }
+
+        // Función para manejar la exportación a PDF
+        function handleExportPdf() {
+            const element = document.querySelector('.gantt-table-container');
+            if (!element) {
+                showMessage("No hay un diagrama de Gantt para exportar.");
+                return;
+            }
+            showMessage("Generando PDF... por favor espere.");
+            const body = document.body;
+            body.classList.add('pdf-exporting');
+            const originalOverflow = element.style.overflowX;
+            const originalWidth = element.style.width;
+            element.style.overflowX = 'visible';
+            element.style.width = `${element.scrollWidth}px`;
+            setTimeout(() => {
+                html2canvas(element, { 
+                    scale: 2, 
+                    logging: true,
+                    useCORS: true,
+                    backgroundColor: null,
+                    boxShadow: 'none'
+                }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF({
+                        orientation: 'landscape',
+                        unit: 'mm',
+                        format: 'a4'
+                    });
+                    const imgWidth = canvas.width;
+                    const imgHeight = canvas.height;
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+                    const scaledWidth = imgWidth * ratio;
+                    const scaledHeight = imgHeight * ratio;
+                    const x = (pdfWidth - scaledWidth) / 2;
+                    const y = 10;
+                    pdf.addImage(imgData, 'JPEG', x, y, scaledWidth, scaledHeight);
+                    pdf.save(`Diagrama_Gantt_${currentProjectName.textContent}_${new Date().toISOString().slice(0, 10)}.pdf`);
+                    showMessage("¡Tu diagrama se ha exportado con éxito a PDF!");
+                }).catch(error => {
+                    console.error("Error al generar el PDF:", error);
+                    showMessage("Error al generar el PDF. Inténtalo de nuevo.");
+                }).finally(() => {
+                    element.style.overflowX = originalOverflow;
+                    element.style.width = originalWidth;
+                    body.classList.remove('pdf-exporting');
+                });
+            }, 100);
+        }
+
+        // --- Event Listeners ---
+
+        projectsTabBtn.addEventListener('click', () => switchTab('projects'));
+        tasksTabBtn.addEventListener('click', () => {
+            if (currentProjectId) {
+                switchTab('tasks');
+            } else {
+                showMessage("Por favor, seleccione un proyecto primero.");
+            }
+        });
+
+        createProjectBtn.addEventListener('click', () => {
+            const projectName = newProjectNameInput.value.trim();
+            if (projectName === '') {
+                showMessage("Por favor, ingrese un nombre para el proyecto.");
+                return;
+            }
+            createProject(projectName);
+            newProjectNameInput.value = '';
+        });
+
+        projectSelect.addEventListener('change', (e) => {
+            currentProjectId = e.target.value;
+            if (currentProjectId) {
+                const selectedProjectName = e.target.options[e.target.selectedIndex].textContent;
+                currentProjectName.textContent = selectedProjectName;
+                allTasks = loadTasks(currentProjectId);
+                tasksContainer.classList.remove('hidden');
+                tasksTabBtn.disabled = false;
+                tasksTabBtn.classList.remove('text-gray-400');
+                tasksTabBtn.classList.add('text-gray-700');
+                renderGanttTable(allTasks);
+                switchTab('tasks');
+            } else {
+                tasksContainer.classList.add('hidden');
+                tasksTabBtn.disabled = true;
+                tasksTabBtn.classList.add('text-gray-400');
+                tasksTabBtn.classList.remove('text-gray-700');
+            }
+        });
+
+        exportPdfBtn.addEventListener('click', handleExportPdf);
+
+        // Editabilidad y manejo de inputs
+        document.addEventListener('click', function(e) {
+            const editableCell = e.target.closest('.editable');
+            if (editableCell && !editableCell.querySelector('input, select')) {
+                const originalText = editableCell.textContent.trim();
+                const field = editableCell.dataset.field;
+                const taskId = editableCell.closest('tr').dataset.taskId;
+                
+                editableCell.innerHTML = '';
+                
+                if (field === 'startDate') {
+                    const input = document.createElement('input');
+                    input.type = 'date';
+                    input.value = originalText;
+                    input.className = 'w-full text-gray-900';
+                    editableCell.appendChild(input);
+                    input.focus();
+                    
+                    input.addEventListener('change', function() {
+                        updateTaskInLocalStorage(taskId, field, input.value);
+                    });
+                    input.addEventListener('blur', function() {
+                        editableCell.textContent = originalText;
+                    });
+                } else if (field === 'predecessorId') {
+                    const select = document.createElement('select');
+                    const options = allTasks.map(task => `<option value="${task.id}">${task.name}</option>`);
+                    const noneOption = `<option value="">Ninguna</option>`;
+                    select.innerHTML = noneOption + options.join('');
+                    
+                    const currentPredecessorId = editableCell.dataset.predecessorId;
+                    select.value = currentPredecessorId;
+                    
+                    select.className = 'w-full text-gray-900';
+                    editableCell.appendChild(select);
+                    select.focus();
+                    
+                    select.addEventListener('change', function() {
+                        updateTaskInLocalStorage(taskId, field, select.value);
+                    });
+                    select.addEventListener('blur', function() {
+                        editableCell.textContent = originalText;
+                    });
+
+                } else {
+                    const input = document.createElement('input');
+                    input.type = (field === 'duration') ? 'number' : 'text';
+                    input.value = (field === 'duration') ? parseInt(originalText.replace(' días', '')) : originalText;
+                    input.className = 'w-full text-gray-900';
+                    editableCell.appendChild(input);
+                    input.focus();
+
+                    input.addEventListener('keydown', function(event) {
+                        if (event.key === 'Enter') {
+                            const newValue = input.value.trim();
+                            if (newValue !== originalText && newValue !== '') {
+                                updateTaskInLocalStorage(taskId, field, newValue);
+                            } else {
+                                editableCell.textContent = originalText;
+                            }
+                        } else if (event.key === 'Escape') {
+                            editableCell.textContent = originalText;
+                        }
+                    });
+
+                    input.addEventListener('blur', function() {
+                        const newValue = input.value.trim();
+                        if (newValue !== originalText && newValue !== '') {
+                            updateTaskInLocalStorage(taskId, field, newValue);
+                        } else {
+                            editableCell.textContent = originalText;
+                        }
+                    });
+                }
+            }
+        });
+        
+        // Lógica de cambio de pestañas
+        function switchTab(tabId) {
+            projectsTabContent.classList.add('hidden');
+            tasksTabContent.classList.add('hidden');
+            projectsTabBtn.classList.remove('active');
+            tasksTabBtn.classList.remove('active');
+
+            if (tabId === 'projects') {
+                projectsTabContent.classList.remove('hidden');
+                projectsTabBtn.classList.add('active');
+            } else if (tabId === 'tasks') {
+                tasksTabContent.classList.remove('hidden');
+                tasksTabBtn.classList.add('active');
+            }
+        }
+        
+        // Cierra el cuadro de mensaje
+        closeMessageBtn.addEventListener('click', () => {
+            messageBox.classList.add('hidden');
+        });
+
+        // Inicializa la aplicación
+        renderProjectSelect();
+        switchTab('projects');
+    </script>
+</body>
+</html>
