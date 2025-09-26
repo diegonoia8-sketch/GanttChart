@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Proyectos</title>
+    <title>Gestión de Proyectos (Local)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -129,12 +129,10 @@
 </head>
 <body class="bg-gray-100 antialiased">
     <div class="container-main">
-        <!-- Sidebar -->
         <div class="sidebar">
             <h1 class="text-3xl font-extrabold text-gray-900 mb-4">Gestión de Proyectos</h1>
-            <p class="text-xs text-gray-500 mb-2">ID de Usuario: <span id="userIdDisplay" class="font-mono text-gray-700"></span></p>
+            <p class="text-xs text-gray-500 mb-2">Almacenamiento: <span id="userIdDisplay" class="font-mono text-gray-700">Local</span></p>
 
-            <!-- Sección de Creación de Proyectos -->
             <div class="card p-6 bg-gray-50">
                 <h2 class="text-xl font-bold text-gray-700 mb-4">Crear Proyecto</h2>
                 <div class="flex flex-col gap-4">
@@ -145,7 +143,6 @@
                 </div>
             </div>
 
-            <!-- Sección de Selección de Proyectos -->
             <div class="card p-6 bg-gray-50">
                 <h2 class="text-xl font-bold text-gray-700 mb-4">Seleccionar Proyecto</h2>
                 <div class="flex flex-col gap-2">
@@ -160,11 +157,8 @@
             </div>
         </div>
 
-        <!-- Contenido Principal -->
         <div class="main-content" id="mainContent">
-            <!-- Contenedor del contenido del proyecto, ahora visible por defecto -->
-            <div id="projectContentContainer" class="flex flex-col gap-8">
-                <!-- Título y botón de exportación -->
+            <div id="projectContentContainer" class="flex flex-col gap-8 hidden">
                 <div id="tasksHeader" class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold text-gray-800">Tareas del Proyecto: <span id="currentProjectName" class="text-blue-600"></span></h2>
                     <button id="exportPdfBtn" class="bg-red-600 text-white p-3 rounded-lg font-semibold hover:bg-red-700 transition duration-300 btn-with-icon shadow-md">
@@ -172,7 +166,6 @@
                     </button>
                 </div>
 
-                <!-- Contenedor del diagrama de Gantt en formato de tabla -->
                 <div id="ganttContainer" class="gantt-table-container rounded-xl flex-grow">
                     <table class="w-full border-collapse">
                         <thead>
@@ -191,7 +184,6 @@
                             </tr>
                         </thead>
                         <tbody id="ganttBody">
-                            <!-- Fila para añadir nuevas tareas -->
                             <tr class="bg-gray-50 add-task-row">
                                 <td class="p-3"><input type="text" id="newTaskInput" placeholder="Nombre de la tarea" class="w-full rounded-md border border-gray-300 p-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"></td>
                                 <td class="p-3"><input type="text" id="newResponsibleInput" placeholder="Responsable" class="w-full rounded-md border border-gray-300 p-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"></td>
@@ -221,25 +213,13 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, onSnapshot, collection, query, where, getDocs, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        setLogLevel('debug');
-
-        // Global variables for Firebase
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        let db, auth, userId = null;
-        let isAuthReady = false;
+    <script>
+        // Variables globales
         let currentProjectId = null;
-        let tasksListenerUnsubscribe = null;
         let allTasks = [];
+        let allProjects = [];
 
-        // DOM element references
+        // Referencias de elementos DOM
         const newProjectNameInput = document.getElementById('newProjectNameInput');
         const createProjectBtn = document.getElementById('createProjectBtn');
         const projectSelect = document.getElementById('projectSelect');
@@ -249,86 +229,92 @@
         const messageBox = document.getElementById('messageBox');
         const messageText = document.getElementById('messageText');
         const closeMessageBtn = document.getElementById('closeMessageBtn');
-        const userIdDisplay = document.getElementById('userIdDisplay');
         const projectContentContainer = document.getElementById('projectContentContainer');
         const predecessorSelect = document.getElementById('predecessorSelect');
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
+        // --- Almacenamiento Local (localStorage) ---
 
-        // Handle authentication
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                userId = user.uid;
-            } else {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
+        /** Obtiene todos los proyectos de localStorage. */
+        function getProjects() {
+            try {
+                const projects = localStorage.getItem('localProjects');
+                return projects ? JSON.parse(projects) : [];
+            } catch (e) {
+                console.error("Error reading projects from localStorage:", e);
+                return [];
             }
-            isAuthReady = true;
-            if (userId) {
-                userIdDisplay.textContent = userId;
-                setupProjectListener();
-            }
-        });
-
-        // Set up Firestore listener for projects
-        function setupProjectListener() {
-            if (!isAuthReady || !userId) return;
-
-            const projectsCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'projects');
-            loadingProjects.classList.remove('hidden');
-
-            onSnapshot(projectsCollectionRef, (snapshot) => {
-                const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                projectSelect.innerHTML = '<option value="">-- Seleccione un proyecto --</option>';
-                projects.forEach(project => {
-                    const option = document.createElement('option');
-                    option.value = project.id;
-                    option.textContent = project.name;
-                    projectSelect.appendChild(option);
-                });
-                
-                // Si se ha establecido un proyecto actual, seleccionarlo en el desplegable.
-                if (currentProjectId) {
-                    projectSelect.value = currentProjectId;
-                    // Dispara manualmente el evento de cambio para asegurar que la UI se actualice.
-                    projectSelect.dispatchEvent(new Event('change'));
-                }
-
-                loadingProjects.classList.add('hidden');
-            }, (error) => {
-                console.error("Error fetching projects:", error);
-                showMessage("Error al cargar la lista de proyectos.");
-            });
         }
 
-        // Set up Firestore listener for tasks of the selected project
-        function setupTasksListener() {
-            if (tasksListenerUnsubscribe) {
-                tasksListenerUnsubscribe();
+        /** Guarda todos los proyectos en localStorage. */
+        function saveProjects(projects) {
+            try {
+                localStorage.setItem('localProjects', JSON.stringify(projects));
+                allProjects = projects; // Actualiza la variable global
+            } catch (e) {
+                console.error("Error saving projects to localStorage:", e);
+                showMessage("Error al guardar proyectos. El almacenamiento local podría estar lleno.");
+            }
+        }
+
+        /** Obtiene las tareas de un proyecto específico de localStorage. */
+        function getTasks(projectId) {
+            try {
+                const tasks = localStorage.getItem(`tasks_${projectId}`);
+                return tasks ? JSON.parse(tasks) : [];
+            } catch (e) {
+                console.error("Error reading tasks from localStorage:", e);
+                return [];
+            }
+        }
+
+        /** Guarda las tareas de un proyecto específico en localStorage. */
+        function saveTasks(projectId, tasks) {
+            try {
+                localStorage.setItem(`tasks_${projectId}`, JSON.stringify(tasks));
+                allTasks = tasks; // Actualiza la variable global
+                renderGanttTable(allTasks); // Vuelve a renderizar después de guardar
+            } catch (e) {
+                console.error("Error saving tasks to localStorage:", e);
+                showMessage("Error al guardar tareas. El almacenamiento local podría estar lleno.");
+            }
+        }
+
+        // --- Lógica de la Aplicación ---
+
+        /** Simula el listener de proyectos de Firebase. */
+        function setupProjectListener() {
+            loadingProjects.classList.remove('hidden');
+            allProjects = getProjects();
+            
+            projectSelect.innerHTML = '<option value="">-- Seleccione un proyecto --</option>';
+            allProjects.forEach(project => {
+                const option = document.createElement('option');
+                option.value = project.id;
+                option.textContent = project.name;
+                projectSelect.appendChild(option);
+            });
+            
+            if (currentProjectId) {
+                projectSelect.value = currentProjectId;
+                projectSelect.dispatchEvent(new Event('change'));
             }
 
-            if (!isAuthReady || !userId || !currentProjectId) {
+            loadingProjects.classList.add('hidden');
+        }
+
+        /** Simula el listener de tareas para el proyecto seleccionado. */
+        function setupTasksListener() {
+            if (!currentProjectId) {
+                allTasks = [];
+                renderGanttTable(allTasks);
                 return;
             }
-
-            const tasksCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'projects', currentProjectId, 'tasks');
-
-            tasksListenerUnsubscribe = onSnapshot(tasksCollectionRef, (snapshot) => {
-                allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderGanttTable(allTasks);
-            }, (error) => {
-                console.error("Error fetching tasks:", error);
-                showMessage("Error al cargar las tareas del proyecto.");
-            });
+            // Obtener y renderizar tareas directamente
+            allTasks = getTasks(currentProjectId);
+            renderGanttTable(allTasks);
         }
 
-        // Helper function to get week number (ISO 8601)
+        /** Calcula la semana del año (ISO 8601). */
         function getWeekNumber(d) {
             d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
             d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -336,18 +322,17 @@
             return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
         }
 
-        // Render the Gantt chart as an HTML table
+        /** Renderiza el diagrama de Gantt en formato de tabla. */
         function renderGanttTable(tasks) {
             const ganttDatesHeader = document.getElementById('ganttDatesHeader');
             const ganttBody = document.getElementById('ganttBody');
             
-            // Limpiar solo las filas de tareas, no la fila de entrada.
-            // Para ello, eliminamos todas las filas a partir de la segunda (índice 1).
+            // Limpiar solo las filas de tareas (mantener la fila de entrada).
             while (ganttBody.rows.length > 1) {
                 ganttBody.deleteRow(1);
             }
             
-            // Populate the predecessor dropdown options
+            // Llenar las opciones del desplegable de predecesoras
             predecessorSelect.innerHTML = '<option value="">Predecesora (opcional)</option>';
             tasks.forEach(task => {
                 const option = document.createElement('option');
@@ -364,20 +349,14 @@
                 return;
             }
 
-            // Sort tasks to ensure dependencies are shown sequentially
+            // Ordenar tareas por fecha de inicio
             tasks.sort((a, b) => {
-                if (a.startDate === b.startDate) {
-                    return 0;
-                }
-                if (!a.startDate) {
-                    return 1;
-                }
-                if (!b.startDate) {
-                    return -1;
-                }
-                return new Date(a.startDate) - new Date(b.startDate);
+                const dateA = a.startDate ? new Date(a.startDate) : new Date(0);
+                const dateB = b.startDate ? new Date(b.startDate) : new Date(0);
+                return dateA - dateB;
             });
 
+            // Determinar el rango de fechas para el Gantt
             const allDates = new Set();
             tasks.forEach(task => {
                 if (task.startDate && task.duration) {
@@ -392,18 +371,18 @@
 
             const sortedDates = Array.from(allDates).sort();
             const minDate = sortedDates.length > 0 ? new Date(sortedDates[0]) : new Date();
-            const maxDate = new Date(Math.max(...tasks.map(t => new Date(t.endDate).getTime())));
+            const maxDate = new Date(Math.max(...tasks.map(t => new Date(t.endDate).getTime() || 0)));
 
-            // Render week headers
+            // Renderizar encabezados de semanas
             ganttDatesHeader.innerHTML = '';
             const weekHeaderCell = document.createElement('th');
             weekHeaderCell.colSpan = "7";
             ganttDatesHeader.appendChild(weekHeaderCell);
 
             let currentDate = new Date(minDate);
-            currentDate.setDate(currentDate.getDate() - (currentDate.getDay() || 7) + 1); // Start on Monday
+            currentDate.setDate(currentDate.getDate() - (currentDate.getDay() || 7) + 1); // Empezar en Lunes
             
-            const weekCount = Math.ceil((maxDate - currentDate) / (1000 * 60 * 60 * 24 * 7)) + 1;
+            const weekCount = Math.ceil((maxDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24 * 7)) + 1;
             for (let i = 0; i < weekCount; i++) {
                 const weekNumber = getWeekNumber(currentDate);
                 const th = document.createElement('th');
@@ -413,43 +392,27 @@
                 currentDate.setDate(currentDate.getDate() + 7);
             }
 
-            // Render task rows
+            // Renderizar filas de tareas
             tasks.forEach(task => {
                 const row = document.createElement('tr');
                 row.className = 'task-row bg-white text-gray-900';
                 row.setAttribute('data-task-id', task.id);
 
-                // Task details cells
-                const nameCell = document.createElement('td');
-                nameCell.textContent = task.name;
-                nameCell.className = "task-detail-cell editable";
-                nameCell.setAttribute('data-field', 'name');
+                // Celdas de detalles de tarea
+                const nameCell = createEditableCell(task.name, 'name', task.id);
                 row.appendChild(nameCell);
 
-                const responsibleCell = document.createElement('td');
-                responsibleCell.textContent = task.responsible;
-                responsibleCell.className = "task-detail-cell editable";
-                responsibleCell.setAttribute('data-field', 'responsible');
+                const responsibleCell = createEditableCell(task.responsible, 'responsible', task.id);
                 row.appendChild(responsibleCell);
                 
                 const predecessorName = task.predecessorId ? (tasks.find(t => t.id === task.predecessorId)?.name || 'N/A') : 'N/A';
-                const predecessorCell = document.createElement('td');
-                predecessorCell.textContent = predecessorName;
-                predecessorCell.className = "task-detail-cell editable";
-                predecessorCell.setAttribute('data-field', 'predecessorId');
-                predecessorCell.setAttribute('data-predecessor-id', task.predecessorId || '');
+                const predecessorCell = createEditableCell(predecessorName, 'predecessorId', task.id, task.predecessorId);
                 row.appendChild(predecessorCell);
                 
-                const durationCell = document.createElement('td');
-                durationCell.textContent = `${task.duration} días`;
-                durationCell.className = "task-detail-cell editable";
-                durationCell.setAttribute('data-field', 'duration');
+                const durationCell = createEditableCell(`${task.duration} días`, 'duration', task.id);
                 row.appendChild(durationCell);
 
-                const startDateCell = document.createElement('td');
-                startDateCell.textContent = task.startDate;
-                startDateCell.className = "task-detail-cell editable";
-                startDateCell.setAttribute('data-field', 'startDate');
+                const startDateCell = createEditableCell(task.startDate, 'startDate', task.id);
                 row.appendChild(startDateCell);
                 
                 const endDateCell = document.createElement('td');
@@ -457,7 +420,7 @@
                 endDateCell.className = "task-detail-cell";
                 row.appendChild(endDateCell);
                 
-                // Delete button cell
+                // Celda del botón de eliminar
                 const deleteCell = document.createElement('td');
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'delete-btn text-white px-3 py-1 rounded-full text-sm font-semibold';
@@ -468,7 +431,7 @@
                 deleteCell.appendChild(deleteBtn);
                 row.appendChild(deleteCell);
                 
-                // Gantt chart cells
+                // Celdas del diagrama de Gantt
                 for (let i = 0; i < weekCount; i++) {
                     const ganttCell = document.createElement('td');
                     ganttCell.className = 'relative text-center';
@@ -507,128 +470,159 @@
                 ganttBody.appendChild(row);
             });
         }
+
+        /** Crea una celda de tabla editable. */
+        function createEditableCell(text, field, taskId, predecessorId = null) {
+            const cell = document.createElement('td');
+            cell.textContent = text;
+            cell.className = "task-detail-cell editable";
+            cell.setAttribute('data-field', field);
+            if (predecessorId !== null) {
+                cell.setAttribute('data-predecessor-id', predecessorId);
+            }
+            return cell;
+        }
         
-        // Add a new project to Firestore and set it as the current project
-        async function createProject(projectName) {
-            if (!isAuthReady || !userId) return;
-            try {
-                const projectsCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'projects');
-                const newDocRef = await addDoc(projectsCollectionRef, { name: projectName, createdAt: new Date() });
-                currentProjectId = newDocRef.id; // Establece el ID del nuevo proyecto como el actual
-                showMessage('Proyecto creado con éxito.');
-            } catch (error) {
-                console.error("Error creating project:", error);
-                showMessage("Error al crear el proyecto. Inténtalo de nuevo.");
-            }
+        // --- Funciones de Modificación de Datos ---
+
+        /** Crea un nuevo proyecto y lo guarda localmente. */
+        function createProject(projectName) {
+            const newProject = {
+                id: Date.now().toString(), // ID simple basado en el tiempo
+                name: projectName,
+                createdAt: new Date().toISOString()
+            };
+            
+            const projects = getProjects();
+            projects.push(newProject);
+            saveProjects(projects);
+            currentProjectId = newProject.id;
+            
+            // Lógica para actualizar el selector de proyectos
+            setupProjectListener(); // Recargar el selector
+            projectSelect.value = currentProjectId;
+            projectSelect.dispatchEvent(new Event('change'));
+
+            showMessage('Proyecto creado con éxito.');
         }
 
-        // Add a new task to Firestore
-        async function addTaskToFirestore(name, responsible, duration, predecessorId, userStartDate) {
-            if (!isAuthReady || !userId || !currentProjectId) return;
-            try {
-                const tasksCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'projects', currentProjectId, 'tasks');
-                
-                let startDate = userStartDate;
-                // If the user did not provide a start date, calculate it based on predecessor
-                if (!startDate && predecessorId) {
-                    const predecessorTask = allTasks.find(t => t.id === predecessorId);
-                    if (predecessorTask) {
-                        const predecessorEndDate = new Date(predecessorTask.endDate);
-                        predecessorEndDate.setDate(predecessorEndDate.getDate() + 1);
-                        startDate = predecessorEndDate.toISOString().slice(0, 10);
-                    }
-                }
-                
-                if (!startDate) {
-                    startDate = new Date().toISOString().slice(0, 10);
-                }
-                
-                const endDate = new Date(startDate);
-                endDate.setDate(endDate.getDate() + parseInt(duration) - 1);
-
-                const taskData = {
-                    name,
-                    responsible,
-                    duration: parseInt(duration),
-                    startDate,
-                    endDate: endDate.toISOString().slice(0, 10),
-                    createdAt: new Date()
-                };
-                if (predecessorId) {
-                    taskData.predecessorId = predecessorId;
-                }
-                await addDoc(tasksCollectionRef, taskData);
-                showMessage('Tarea agregada con éxito.');
-            } catch (error) {
-                console.error("Error al agregar la tarea:", error);
-                showMessage("Error al guardar la tarea. Inténtalo de nuevo.");
+        /** Agrega una nueva tarea y la guarda localmente. */
+        function addTaskToFirestore(name, responsible, duration, predecessorId, userStartDate) {
+            if (!currentProjectId) {
+                showMessage("Por favor, seleccione un proyecto primero.");
+                return;
             }
+
+            let startDate = userStartDate;
+            const durationInt = parseInt(duration);
+
+            // 1. Calcular la fecha de inicio (si no se proporciona)
+            if (!startDate && predecessorId) {
+                const predecessorTask = allTasks.find(t => t.id === predecessorId);
+                if (predecessorTask) {
+                    const predecessorEndDate = new Date(predecessorTask.endDate);
+                    predecessorEndDate.setDate(predecessorEndDate.getDate() + 1);
+                    startDate = predecessorEndDate.toISOString().slice(0, 10);
+                }
+            }
+            
+            if (!startDate) {
+                startDate = new Date().toISOString().slice(0, 10);
+            }
+            
+            // 2. Calcular la fecha de fin
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + durationInt - 1);
+
+            // 3. Crear el objeto de tarea
+            const newTask = {
+                id: Date.now().toString() + Math.random().toString(16).slice(2), // ID único
+                name,
+                responsible,
+                duration: durationInt,
+                startDate,
+                endDate: endDate.toISOString().slice(0, 10),
+                createdAt: new Date().toISOString()
+            };
+            if (predecessorId) {
+                newTask.predecessorId = predecessorId;
+            }
+            
+            // 4. Guardar en localStorage
+            const tasks = getTasks(currentProjectId);
+            tasks.push(newTask);
+            saveTasks(currentProjectId, tasks);
+
+            showMessage('Tarea agregada con éxito.');
         }
 
-        // Update a task in Firestore
-        async function updateTaskInFirestore(taskId, field, value) {
-            if (!isAuthReady || !userId || !currentProjectId) return;
-            try {
-                const taskDocRef = doc(db, 'artifacts', appId, 'users', userId, 'projects', currentProjectId, 'tasks', taskId);
-                
-                const updateData = {};
-                
-                const existingTask = allTasks.find(t => t.id === taskId);
-                let newStartDate = existingTask.startDate;
-                let newDuration = existingTask.duration;
-                let newPredecessorId = existingTask.predecessorId;
-                
-                if (field === 'startDate') {
-                    newStartDate = value;
-                    updateData.startDate = newStartDate;
-                } else if (field === 'duration') {
-                    newDuration = parseInt(value);
-                    updateData.duration = newDuration;
-                } else if (field === 'predecessorId') {
-                    newPredecessorId = value;
+        /** Actualiza una tarea y la guarda localmente. */
+        function updateTaskInFirestore(taskId, field, value) {
+            if (!currentProjectId) return;
+
+            const tasks = getTasks(currentProjectId);
+            const taskIndex = tasks.findIndex(t => t.id === taskId);
+            if (taskIndex === -1) return;
+
+            const existingTask = tasks[taskIndex];
+            
+            let newStartDate = existingTask.startDate;
+            let newDuration = existingTask.duration;
+            let newPredecessorId = existingTask.predecessorId;
+            
+            // 1. Aplicar el cambio del campo
+            if (field === 'startDate') {
+                newStartDate = value;
+                existingTask.startDate = newStartDate;
+                existingTask.predecessorId = undefined; // Borrar predecesora si se establece manualmente el inicio
+            } else if (field === 'duration') {
+                newDuration = parseInt(value);
+                existingTask.duration = newDuration;
+            } else if (field === 'responsible' || field === 'name') {
+                existingTask[field] = value;
+            } else if (field === 'predecessorId') {
+                newPredecessorId = value;
+                if (newPredecessorId) {
                     const predecessorTask = allTasks.find(t => t.id === newPredecessorId);
                     if (predecessorTask) {
                         const predecessorEndDate = new Date(predecessorTask.endDate);
                         predecessorEndDate.setDate(predecessorEndDate.getDate() + 1);
                         newStartDate = predecessorEndDate.toISOString().slice(0, 10);
-                    } else {
-                        newStartDate = new Date().toISOString().slice(0, 10);
+                        existingTask.startDate = newStartDate;
                     }
-                    updateData.predecessorId = newPredecessorId;
-                    updateData.startDate = newStartDate;
                 } else {
-                    updateData[field] = value;
+                    // Si se elimina la predecesora, usar la fecha de hoy o la fecha de inicio existente
+                    newStartDate = existingTask.startDate || new Date().toISOString().slice(0, 10);
+                    existingTask.startDate = newStartDate;
                 }
-
-                // If duration or startDate changed, recalculate endDate
-                if (field === 'startDate' || field === 'duration' || field === 'predecessorId') {
-                    const newEndDate = new Date(newStartDate);
-                    newEndDate.setDate(newEndDate.getDate() + newDuration - 1);
-                    updateData.endDate = newEndDate.toISOString().slice(0, 10);
-                }
-                
-                await updateDoc(taskDocRef, updateData);
-                showMessage('Tarea actualizada con éxito.');
-            } catch (error) {
-                console.error("Error updating task:", error);
-                showMessage("Error al actualizar la tarea. Inténtalo de nuevo.");
+                existingTask.predecessorId = newPredecessorId;
             }
+
+            // 2. Recalcular la fecha de fin si es necesario
+            if (field === 'startDate' || field === 'duration' || field === 'predecessorId') {
+                const newEndDate = new Date(newStartDate);
+                newEndDate.setDate(newEndDate.getDate() + newDuration - 1);
+                existingTask.endDate = newEndDate.toISOString().slice(0, 10);
+            }
+            
+            tasks[taskIndex] = existingTask;
+            saveTasks(currentProjectId, tasks);
+            showMessage('Tarea actualizada con éxito.');
         }
 
-        // Delete a task from Firestore
-        async function deleteTask(taskId) {
-            if (!isAuthReady || !userId || !currentProjectId) return;
-            try {
-                const taskDocRef = doc(db, 'artifacts', appId, 'users', userId, 'projects', currentProjectId, 'tasks', taskId);
-                await deleteDoc(taskDocRef);
-                showMessage('Tarea eliminada con éxito.');
-            } catch (error) {
-                console.error("Error al eliminar la tarea:", error);
-                showMessage("Error al eliminar la tarea. Inténtalo de nuevo.");
-            }
+        /** Elimina una tarea y la guarda localmente. */
+        function deleteTask(taskId) {
+            if (!currentProjectId) return;
+
+            const tasks = getTasks(currentProjectId);
+            const updatedTasks = tasks.filter(t => t.id !== taskId);
+            
+            saveTasks(currentProjectId, updatedTasks);
+            showMessage('Tarea eliminada con éxito.');
         }
 
-        // Handle adding a new task from the integrated form
+        // --- Manejadores de Eventos ---
+
         function handleAddTask() {
             const newTaskInput = document.getElementById('newTaskInput');
             const newResponsibleInput = document.getElementById('newResponsibleInput');
@@ -653,12 +647,11 @@
             predecessorSelect.value = '';
         }
 
-        // Handle PDF export
         function handleExportPdf() {
             const element = document.querySelector('.gantt-table-container table');
 
-            if (!element) {
-                showMessage("No hay un diagrama de Gantt para exportar.");
+            if (!element || allTasks.length === 0) {
+                showMessage("No hay tareas ni un diagrama de Gantt para exportar.");
                 return;
             }
             showMessage("Generando PDF... por favor espere.");
@@ -669,7 +662,9 @@
             const ganttTableContainer = document.querySelector('.gantt-table-container');
             const originalScrollLeft = ganttTableContainer.scrollLeft;
 
+            // Ajustes para html2canvas para capturar todo el ancho
             ganttTableContainer.style.overflowX = 'visible';
+            const originalWidth = ganttTableContainer.style.width;
             ganttTableContainer.style.width = `${element.offsetWidth}px`;
             
             setTimeout(() => {
@@ -709,15 +704,22 @@
                     console.error("Error al generar el PDF:", error);
                     showMessage("Error al generar el PDF. Inténtalo de nuevo.");
                 }).finally(() => {
+                    // Restaurar estilos
                     ganttTableContainer.style.overflowX = 'auto';
-                    ganttTableContainer.style.width = '100%';
+                    ganttTableContainer.style.width = originalWidth; // Restaurar el ancho original
                     ganttTableContainer.scrollLeft = originalScrollLeft;
                     body.classList.remove('pdf-exporting');
                 });
             }, 100);
         }
 
-        // Event Listeners
+        // --- Inicialización y Escucha de Eventos DOM ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Inicializar la carga de proyectos locales al cargar la página
+            setupProjectListener();
+        });
+
         createProjectBtn.addEventListener('click', () => {
             const projectName = newProjectNameInput.value.trim();
             if (projectName === '') {
@@ -733,17 +735,17 @@
             if (currentProjectId) {
                 const selectedProjectName = e.target.options[e.target.selectedIndex].textContent;
                 currentProjectName.textContent = selectedProjectName;
-                projectContentContainer.classList.remove('hidden'); // Muestra el contenido principal del proyecto
+                projectContentContainer.classList.remove('hidden'); 
                 setupTasksListener();
             } else {
-                if (tasksListenerUnsubscribe) {
-                    tasksListenerUnsubscribe();
-                }
-                projectContentContainer.classList.add('hidden'); // Oculta el contenido principal del proyecto
+                currentProjectName.textContent = '';
+                projectContentContainer.classList.add('hidden');
+                setupTasksListener(); // Limpia la vista de tareas
             }
         });
 
         document.getElementById('addTaskBtn').addEventListener('click', handleAddTask);
+
         predecessorSelect.addEventListener('change', (e) => {
             const predecessorId = e.target.value;
             if (predecessorId) {
@@ -760,7 +762,7 @@
 
         exportPdfBtn.addEventListener('click', handleExportPdf);
 
-        // Editability and input handling
+        // Manejo de la edición en línea
         document.addEventListener('click', function(e) {
             const editableCell = e.target.closest('.editable');
             if (editableCell && !editableCell.querySelector('input, select')) {
@@ -786,7 +788,7 @@
                     });
                 } else if (field === 'predecessorId') {
                     const select = document.createElement('select');
-                    const options = allTasks.map(task => `<option value="${task.id}">${task.name}</option>`);
+                    const options = allTasks.filter(t => t.id !== taskId).map(task => `<option value="${task.id}">${task.name}</option>`);
                     const noneOption = `<option value="">Ninguna</option>`;
                     select.innerHTML = noneOption + options.join('');
                     
@@ -812,38 +814,48 @@
                     editableCell.appendChild(input);
                     input.focus();
 
+                    const commitEdit = () => {
+                        const newValue = input.value.trim();
+                        let displayValue = newValue;
+                        let valueToSave = newValue;
+
+                        if (field === 'duration') {
+                            if (isNaN(parseInt(newValue)) || parseInt(newValue) <= 0) {
+                                showMessage("La duración debe ser un número positivo.");
+                                editableCell.textContent = originalText;
+                                return;
+                            }
+                            displayValue = `${newValue} días`;
+                            valueToSave = parseInt(newValue);
+                        }
+
+                        if (newValue !== originalText && newValue !== '') {
+                            updateTaskInFirestore(taskId, field, valueToSave);
+                        } else {
+                            editableCell.textContent = originalText;
+                        }
+                    };
+
                     input.addEventListener('keydown', function(event) {
                         if (event.key === 'Enter') {
-                            const newValue = input.value.trim();
-                            if (newValue !== originalText && newValue !== '') {
-                                updateTaskInFirestore(taskId, field, newValue);
-                            } else {
-                                editableCell.textContent = originalText;
-                            }
+                            commitEdit();
                         } else if (event.key === 'Escape') {
                             editableCell.textContent = originalText;
                         }
                     });
 
-                    input.addEventListener('blur', function() {
-                        const newValue = input.value.trim();
-                        if (newValue !== originalText && newValue !== '') {
-                            updateTaskInFirestore(taskId, field, newValue);
-                        } else {
-                            editableCell.textContent = originalText;
-                        }
-                    });
+                    input.addEventListener('blur', commitEdit);
                 }
             }
         });
         
-        // Function to show custom message box
+        // Función para mostrar el cuadro de mensaje personalizado
         function showMessage(text) {
             messageText.textContent = text;
             messageBox.classList.remove('hidden');
         }
 
-        // Close the message box
+        // Cerrar el cuadro de mensaje
         closeMessageBtn.addEventListener('click', () => {
             messageBox.classList.add('hidden');
         });
